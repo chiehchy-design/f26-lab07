@@ -114,9 +114,14 @@ still null-checks all three collaborators. It does, with the same message.
 ### The closing explanation
 
 **Refactor or regenerate? Refactor.**
-- **Test coverage:** thin where it matters. Skipped weeks, the `<=`, cancel
-  scope, and the occurrence bounds were all unpinned, so a regeneration could
-  change them and stay green.
+- **Test coverage:** the tests are green, but they miss important behavior.
+  No test checked what happens when a series week is already taken (my pin is
+  the first). No test checks that cancelling one recurring occurrence also
+  cancels all later ones. No test checks that a series must be 1 to 26 weeks.
+  A regenerated class could do any of these differently and still pass every
+  test, so the tests can't tell us whether a regeneration broke anything. A
+  refactor moves the existing code without rewriting it, so those behaviors
+  stay the same.
 - **Code age:** young and agent-generated, which is the one point for
   regenerating. But it already encodes choices that callers may rely on.
 - **Spec quality:** weak. The only spec is a README line, and the `TimeSlot`
