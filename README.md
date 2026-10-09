@@ -49,3 +49,7 @@ From this directory. `SETUP.md` says what green looks like.
 - CI: `.github/workflows/ci.yml`, same command as above
 
 See the Lab 7 handout on the course page for the three milestones you show a TA.
+
+## Tools used
+
+Claude Code (VS Code extension) with Claude Opus 5.5 (`claude-opus-5-5`), including a Claude Code subagent on the same model that performed the milestone 1 refactor.
