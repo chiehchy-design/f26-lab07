@@ -4,21 +4,33 @@
 
 ### The pin (committed in `a8dc7f0`, before the refactor)
 
-**The pin.** `BookingWorkflowCharacterizationTest.recurringSubmitSkipsAWeekWhoseSlotOnlyTouchesAnExistingBooking`.
-A 3-week series at Mon 9:00-10:00 skips week 2 because another booking starts at
-10:00 that day. The two slots only touch, yet RECURRING checks overlap with `<=`
-while REGULAR and BLOCKED use `<`. The result is still accepted with the message
-`"series S-1: 2 booked, 1 skipped"`, and the occurrence indices are 1 and 3 (a gap,
-not renumbered).
+**The pin.** I added a characterization test on how a **recurring booking
+handles a week whose slot is already taken**
+(`BookingWorkflowCharacterizationTest.recurringSubmitSkipsAWeekWhoseSlotOnlyTouchesAnExistingBooking`),
+because no shipped test covers that case today.
 
-**Why that one?** It is the rule a refactor is most likely to "fix" by accident,
-by merging the three overlap checks into one helper. No shipped test covers it:
-grepping the tests for `getSkipped` and `getOccurrenceIndex` finds nothing, and
-the only recurring submit test uses an empty room.
+- **The feature:** when you book a weekly series, `submit` checks each week for
+  a conflict in the room. If a week is taken, it skips that week and books the
+  rest. Unlike a regular booking, the series also counts a booking that merely
+  *touches* its slot as a conflict: a slot ending at 10:00 conflicts with one
+  starting at 10:00. That's because RECURRING compares with `<=`, while REGULAR
+  and BLOCKED compare with `<`.
+- **The test:** someone already holds the room on Mon Oct 12 from 10:00 to
+  11:00. Then I book a 3-week series every Monday from 9:00 to 10:00, starting
+  Oct 5. Week 2 (Oct 12, 9:00-10:00) only touches the existing booking and
+  doesn't overlap it.
+- **The result:** week 2 is skipped, and weeks 1 and 3 are booked. The
+  request is still accepted, with the message `"series S-1: 2 booked, 1 skipped"`.
+  The two bookings are numbered occurrence 1 and occurrence 3, so the gap is
+  kept rather than renumbered. Three notifications are sent. The test passes
+  on the original code.
 
-**What a regeneration would do differently.** It would decide again whether
-back-to-back slots conflict. It would probably follow `TimeSlot`'s "exclusive
-end" javadoc and book week 2, which silently changes behavior.
+**Why that one?** It is the rule a refactor is most likely to break by
+accident. The three booking types each have their own overlap check, and a
+refactor would naturally merge them into one helper. That would silently start
+booking week 2. No shipped test catches it: the only recurring submit test uses
+an empty room, and no test checks skipped weeks (a grep for `getSkipped` and
+`getOccurrenceIndex` finds nothing).
 
 ### The directive
 
