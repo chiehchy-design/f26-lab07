@@ -18,15 +18,49 @@ observable result it pins. Not "recurring bookings work". Green against the
 shipped code, and you did not edit or delete an existing test method to get
 there.
 
+> `src/test/java/edu/cmu/cs214/scheduling/workflow/BookingWorkflowCharacterizationTest.java`,
+> `recurringSubmitSkipsAWeekWhoseSlotOnlyTouchesAnExistingBooking`. It pins that
+> `BookingWorkflow.submit` on a 3-week RECURRING request (Mon 09:00-10:00) skips
+> week 2 because a booking already starts at 10:00 that Monday. The slots only
+> touch and do not overlap, but the series uses the inclusive `<=` comparison
+> while REGULAR and BLOCKED use `<`. The pinned outcome is: still accepted,
+> `getSkipped()` is exactly that week-2 slot, message
+> `"series S-1: 2 booked, 1 skipped"`, the two written occurrences have
+> `occurrenceIndex` 1 and **3** (the gap stays, nothing is renumbered), and the
+> outbox holds 3 messages. It is a new test class, green against the shipped
+> code (36 run, 0 failures), and no existing test method was edited.
+
 **Why that one, and does a shipped test already cover it?** Of everything
 `BookingWorkflow` does, why is this the behavior worth a test? If something
 shipped comes close, say what your pin adds. If nothing does, say how you
 checked.
 
+> This is the most surprising rule in the class, and the one a refactor is most
+> likely to "fix" by accident. A replace-conditional refactor will want to pull
+> the three copies of the overlap check into one shared helper. Two use `<` and
+> one uses `<=`, so merging them quietly changes which weeks a series skips.
+> It also pins the partial-success path (`BookingOutcome.series` with a
+> non-empty skipped list) and the occurrence-index numbering.
+> I checked the shipped tests by reading all 18 in `BookingWorkflowTest` and
+> grepping the test tree for `getSkipped` and `getOccurrenceIndex`. Neither one
+> appears. The only recurring submit test,
+> `recurringSubmitBooksEveryWeekOfAnOpenSeries`, uses an empty room, so nothing
+> is ever skipped. `regularSubmitAcceptsASlotThatStartsWhenAnotherEnds` pins the
+> opposite boundary rule, but only for REGULAR.
+
 **What a regeneration would do differently here.** Suppose someone
 threw this class away and regenerated it from a one-line description of what a
 booking workflow does. Name the decision that would be made a second time, and
 say which way it would probably go.
+
+> The decision is whether back-to-back slots conflict. TimeSlot's own javadoc
+> says "inclusive start and exclusive end", so a regeneration would almost
+> certainly write a single half-open overlap check (`<`) for every type. Week 2
+> would then be **booked**, not skipped. That is arguably more correct, but it
+> is a behavior change that nobody signed off on: today a series leaves a
+> buffer next to existing bookings. A regeneration would also have to decide
+> again whether a series fails as a whole or skips taken weeks one at a time,
+> and whether occurrence indices are renumbered after a skip.
 
 ### The directive
 
