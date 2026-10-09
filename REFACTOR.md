@@ -150,15 +150,94 @@ regeneration could be checked against them instead of trusted.
 
 ## Milestone 2: The pattern critique
 
-| Pattern | Where | Problem it solves | Exists here? |
-|---|---|---|---|
-| Singleton | `NotifierFactory.getInstance()` | Exactly one shared stateful resource | **No.** The factory has no state and one caller (`NotificationHub.java:22`) |
-| Factory | `NotifierFactory.createStrategy()` | Choosing a concrete class at run time | **No.** It always returns `EmailNotificationStrategy`, no args, no config |
-| Strategy | `NotificationStrategy`, `EmailNotificationStrategy` | 2+ formats picked at run time | **No.** One implementation, and the hub can't even accept a different one |
-| Observer | `NotificationHub`, `NotificationSubscriber`, `OutboxSubscriber` | A changing set of receivers the publisher doesn't know | **No.** The only `subscribe()` call is the hub subscribing itself (`NotificationHub.java:23`) |
+### How `notify/` works today
 
-**Simpler structure.** Keep `NotificationMessage` and `Outbox`. `NotificationHub`
-becomes:
+When `BookingWorkflow` sends a notification, it calls `hub.publish(message)`.
+This is everything that happens:
+
+```text
+BookingWorkflow
+   │  hub.publish(message)
+   ▼
+NotificationHub ──(created once, in its constructor)──► NotifierFactory.getInstance()   [Singleton]
+   │                                                         │ .createStrategy()        [Factory]
+   │                                                         ▼
+   │  strategy.render(message) ───────────────────► EmailNotificationStrategy       [Strategy]
+   │      returns "To: … | Subject: … | body"
+   │
+   │  for each subscriber: onNotification(text)                                      [Observer]
+   ▼
+OutboxSubscriber  (the only subscriber)
+   │  outbox.append(text)
+   ▼
+Outbox  (a list of strings)
+```
+
+That's **4 patterns and 7 classes**. What they actually do comes down to one
+line: *format the message as text and add it to a list.*
+
+### Each pattern: what it is for, and does this project need it?
+
+**1. Singleton (`NotifierFactory`)**: guarantees only one instance ever exists.
+
+```java
+public static synchronized NotifierFactory getInstance() {
+    if (instance == null) { instance = new NotifierFactory(); }
+    return instance;
+}
+```
+- **Useful when:** there's one shared thing that holds data, and having two
+  copies would be a bug (for example, one database connection pool).
+- **Needed here? No.** `NotifierFactory` has no fields and holds no data, so two
+  copies would behave exactly the same. Only one place uses it
+  (`NotificationHub.java:22`).
+
+**2. Factory (`NotifierFactory.createStrategy()`)**: a method that decides
+which class to create.
+
+```java
+public NotificationStrategy createStrategy() {
+    return new EmailNotificationStrategy();   // always this one
+}
+```
+- **Useful when:** the code must pick between different classes at run time,
+  for example from a config setting.
+- **Needed here? No.** It takes no input and always returns the same class.
+  There's no decision to make.
+
+**3. Strategy (`NotificationStrategy` + `EmailNotificationStrategy`)**: an
+interface so you can swap different formatting algorithms.
+
+```java
+this.strategy = NotifierFactory.getInstance().createStrategy(); // in NotificationHub's constructor
+```
+- **Useful when:** there are two or more formats (for example, email and SMS)
+  and you switch between them.
+- **Needed here? No.** There's only one implementation (email). The hub also
+  sets the strategy itself, so nobody *could* pass in a different one.
+
+**4. Observer (`NotificationHub` + `NotificationSubscriber` + `OutboxSubscriber`)**:
+a list of listeners that all get notified when something is published.
+
+```java
+public NotificationHub(Outbox outbox) {
+    ...
+    subscribe(new OutboxSubscriber(outbox));   // the only subscribe() call in the codebase
+}
+```
+- **Useful when:** several different receivers (email, log, Slack…) sign up
+  to hear about events, and the sender shouldn't have to know who they are.
+- **Needed here? No.** There is exactly one receiver, the outbox, and the hub
+  signs it up itself in its own constructor. The test
+  `hubDeliversToItsOneSubscriber` even checks that there is only 1.
+
+### The simpler structure
+
+```text
+BookingWorkflow ── hub.publish(message) ──► NotificationHub ── outbox.append(text) ──► Outbox
+```
+
+Keep `NotificationMessage` and `Outbox`. `NotificationHub` becomes:
 
 ```java
 public void publish(NotificationMessage m) {
