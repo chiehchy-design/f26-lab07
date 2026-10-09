@@ -34,13 +34,27 @@ an empty room, and no test checks skipped weeks (a grep for `getSkipped` and
 
 ### The directive
 
-**Refactor:** Replace Conditional with Polymorphism. Each booking type gets its
-own class implementing one interface (`BookingKind`), and `BookingWorkflow`
-dispatches through an `EnumMap`.
+**Refactor:** Replace Conditional with Polymorphism.
 
-**Scope:** only the `workflow/` package. `domain/`, `notify/`, `pricing/`,
-`reporting/`, and all tests were off limits. The switch lives only in
-`workflow/`, so nothing else needs to change.
+- **The problem:** `BookingWorkflow.java` has four methods: `submit`, `cancel`,
+  `priceOf`, and `describe`. Each one does the same thing first: it switches on
+  the booking type (REGULAR, RECURRING, BLOCKED) and runs different code for
+  each type. So the same type check is repeated four times, and adding a new
+  booking type would mean editing all four switches.
+- **The fix:** pull out what differs by type. A new interface, `BookingKind`,
+  has one method for each of those four operations. Each booking type gets its
+  own class implementing it: `RegularBookingKind`, `RecurringBookingKind`, and
+  `BlockedBookingKind`. Each class holds that type's code from all four
+  methods, copied over unchanged.
+- **After:** `BookingWorkflow` holds the interface. It keeps a map from booking
+  type to `BookingKind`, looks up the right one, and calls it, so no `switch`
+  is left. Its four public methods keep exactly the same signatures, so
+  everything that calls the workflow stays the same.
+
+**Scope:** only the `workflow/` package (the agent edited `BookingWorkflow.java` and
+added the new classes there). `domain/`, `notify/`, `pricing/`, `reporting/`,
+and all tests were off limits. The repeated switch only exists in
+`workflow/`, so nothing else needed to change.
 
 <details>
 <summary>Exact directive given to the agent (Claude Code subagent)</summary>
