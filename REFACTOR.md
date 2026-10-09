@@ -124,9 +124,23 @@ still null-checks all three collaborators. It does, with the same message.
   stay the same.
 - **Code age:** young and agent-generated, which is the one point for
   regenerating. But it already encodes choices that callers may rely on.
-- **Spec quality:** weak. The only spec is a README line, and the `TimeSlot`
-  javadoc contradicts the code.
-- **Reach:** high. Every store write and notification goes through this class.
+- **Spec quality:** weak. To regenerate, you need a description of what the
+  class should do. The only one we have is a single README line: "submit,
+  cancel, price, and describe a booking." It says nothing about the detailed
+  rules, such as skipping taken weeks, how far a cancel reaches, or how a
+  series is priced. Worse, the `TimeSlot` comment says a slot's end time is
+  exclusive, but the recurring code treats it as inclusive. So a regenerated
+  class would have to guess these rules, and it would probably follow the
+  comment and change the behavior. Regenerating from this spec would not give
+  us something better than what we have now.
+- **Reach:** high. "Reach" means how much other code depends on this class.
+  Every booking saved to the store and every notification sent goes through
+  `BookingWorkflow`. The reports (`ReportService`) read the bookings it saves
+  to calculate occupancy and revenue, and the notification tests check the
+  messages it sends. If a regeneration changed any small detail, such as which
+  slots count as a conflict, the effect would spread to reports, revenue, and
+  members' emails. That is another reason to keep the existing code and only
+  restructure it.
 
 **What would flip it.** A written spec plus tests that pin each type's rules
 (overlap boundary, skip, cancel scope, price scope, messages). Then a
